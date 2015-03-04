@@ -3,10 +3,12 @@ package auth
 import (
 	"testing"
 	"net/http"
+	"time"
 )
 
 func TestGenerateDigest(t *testing.T) {
     message := ""
+    // expected digest for empty string
     expectedDigest := "1B2M2Y8AsgTpgAmY7PhCfg=="
     
     digest := generateDigest(message)
@@ -24,6 +26,8 @@ func TestSign(t *testing.T) {
 		t.Error(err)
 	}
 	
+	req.Header.Add(DateHeader, time.Now().Format(http.TimeFormat))
+	t.Logf("Date: %s", req.Header.Get(DateHeader))
 	req.Header.Add(ContentTypeHeader, "application/xml")
 	
 	newReq, err := sign(*req, "jbowman", []byte("hsdofhw"))
