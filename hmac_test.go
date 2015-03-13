@@ -4,6 +4,7 @@ import (
 	"testing"
 	"net/http"
 	"time"
+	"bytes"
 )
 
 func TestGenerateDigest(t *testing.T) {
@@ -18,7 +19,9 @@ func TestGenerateDigest(t *testing.T) {
     }
 }
 
-func TestSign(t *testing.T) {
+func TestSignAuthentic(t *testing.T) {
+	key := []byte("hsdofhw")
+
 	req, err := http.NewRequest("GET", "http://example.com", nil)
 	// /api/v2/projects/[YOUR_PROJECT]/cards/[CARD_NUMBER].xml
 	
@@ -27,18 +30,65 @@ func TestSign(t *testing.T) {
 	}
 	
 	req.Header.Add(DateHeader, time.Now().Format(http.TimeFormat))
-	t.Logf("Date: %s", req.Header.Get(DateHeader))
 	req.Header.Add(ContentTypeHeader, "application/xml")
 	
-	newReq, err := sign(*req, "jbowman", []byte("hsdofhw"))
+	newReq, err := sign(*req, "jbowman", key)
 	
-	blankContentMD5 := req.Header.Get(ContentMD5Header)
-	contentMD5 := newReq.Header.Get(ContentMD5Header)
+	if err != nil {
+		t.Error(err)
+	}
 	
-	
-	t.Logf("blankContentMD5: %s", blankContentMD5)
-	t.Logf("contentMD5: %s", contentMD5)
-	if len(blankContentMD5) > 0 || len(contentMD5) == 0 {
+	if newReq.Header.Get(ContentMD5Header) != "1B2M2Y8AsgTpgAmY7PhCfg==" {
 		t.Fail()
 	}
+	
+	auth, err := authentic(newReq, key)
+	
+	if err != nil {
+		t.Error(err)
+	}
+	
+	if !auth {
+		t.Fail()
+	}
+}
+
+func TestSignChangedBody(t *testing.T) {
+	key := []byte("hsdofhw")
+
+	req, err := http.NewRequest("GET", "http://example.com", nil)
+	// /api/v2/projects/[YOUR_PROJECT]/cards/[CARD_NUMBER].xml
+	
+	if err != nil {
+		t.Error(err)
+	}
+	
+	req.Header.Add(DateHeader, time.Now().Format(http.TimeFormat))
+	req.Header.Add(ContentTypeHeader, "application/xml")
+	
+	newReq, err := sign(*req, "jbowman", key)
+	
+	if err != nil {
+		t.Error(err)
+	}
+	
+	req, err = http.NewRequest("GET", "http://example.com", bytes.NewBuffer([]byte("dummy request body")))
+	req.Header.Add(ContentTypeHeader, newReq.Header.Get(ContentTypeHeader))
+	req.Header.Add(DateHeader, newReq.Header.Get(DateHeader))
+	req.Header.Add(ContentMD5Header, newReq.Header.Get(ContentMD5Header))
+	req.Header.Add(AuthorizationHeader, newReq.Header.Get(AuthorizationHeader))
+			
+	auth, err := authentic(*req, key)
+	
+	if err != nil {
+		t.Error(err)
+	}
+	
+	if auth {
+		t.Fail()
+	}
+}
+
+func TestSignChangedSignature(t *testing.T) {
+
 }

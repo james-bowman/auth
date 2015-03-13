@@ -32,6 +32,22 @@ func generateDigest(message string) (string) {
 	return msg
 }
 
+func generateDigestForBody(body io.ReadCloser) (string, error) {
+	var data []byte
+	if body == nil {
+		data = []byte("")
+	} else {
+		defer body.Close()
+		var err error
+		data, err = ioutil.ReadAll(body)
+		if err != nil {
+			return "", fmt.Errorf("Failed to read request body: %s", err.Error)
+		}
+	}
+	contentMD5 := generateDigest(string(data))
+	
+	return contentMD5, nil
+}
 
 func generateHMAC(message string, key []byte) (string) {
 	h := hmac.New(sha1.New, key)
@@ -41,24 +57,17 @@ func generateHMAC(message string, key []byte) (string) {
 
 func sign(request http.Request, id string, key []byte) (http.Request, error) {
 	uri := request.URL.Path
-	contentType := request.Header.Get(ContentTypeHeader)
-	date := request.Header.Get(DateHeader)
+	contentType, date := request.Header.Get(ContentTypeHeader), request.Header.Get(DateHeader)
 
 	contentMD5 := request.Header.Get(ContentMD5Header)
 	if contentMD5 == "" {
-		var body []byte
-		if request.Body == nil {
-			body = []byte("")
-		} else {
-			var err error
-			body, err = ioutil.ReadAll(request.Body)
-			if err != nil {
-				return request, fmt.Errorf("Failed to read request body: %s", err.Error)
-			}
+		contentMD5, err := generateDigestForBody(request.Body)
+		if err != nil {
+			return request, err
 		}
-		contentMD5 = generateDigest(string(body))
+		
+		request.Header.Add(ContentMD5Header, contentMD5)
 	}
-	request.Header.Add(ContentMD5Header, contentMD5)
 	
 	// 'content-type,content-MD5,request URI,timestamp'
 	mac := contentType + "," + contentMD5 + "," + uri + "," + date
@@ -67,4 +76,25 @@ func sign(request http.Request, id string, key []byte) (http.Request, error) {
 	request.Header.Add(AuthorizationHeader, "APIAuth " + id + ":" + hmac)
 	
 	return request, nil
+}
+
+func authentic(request http.Request, key []byte) (bool, error) {
+	// if message digest doesn't match then message is not authentic/tampered with
+	contentMD5 := request.Header.Get(ContentMD5Header)
+	if contentMD5 == "" {
+		return false, nil
+	}
+	digest, err := generateDigestForBody(request.Body)
+	if err != nil {
+		return false, err
+	}
+	if digest != contentMD5 {
+		return false, nil
+	}
+	
+	// if signature doesn't match then message is not authentic
+	
+	// if message is too old then fail
+	
+	return true, nil
 }
