@@ -32,7 +32,7 @@ func TestSignAuthentic(t *testing.T) {
 	req.Header.Add(DateHeader, time.Now().Format(http.TimeFormat))
 	req.Header.Add(ContentTypeHeader, "application/xml")
 	
-	newReq, err := sign(*req, "jbowman", key)
+	newReq, err := Sign(*req, "jbowman", key)
 	
 	if err != nil {
 		t.Error(err)
@@ -42,7 +42,7 @@ func TestSignAuthentic(t *testing.T) {
 		t.Fail()
 	}
 	
-	auth, err := authentic(newReq, key)
+	auth, err := IsAuthentic(newReq, key)
 	
 	if err != nil {
 		t.Error(err)
@@ -66,7 +66,7 @@ func TestSignChangedBody(t *testing.T) {
 	req.Header.Add(DateHeader, time.Now().Format(http.TimeFormat))
 	req.Header.Add(ContentTypeHeader, "application/xml")
 	
-	newReq, err := sign(*req, "jbowman", key)
+	newReq, err := Sign(*req, "jbowman", key)
 	
 	if err != nil {
 		t.Error(err)
@@ -78,7 +78,7 @@ func TestSignChangedBody(t *testing.T) {
 	req.Header.Add(ContentMD5Header, newReq.Header.Get(ContentMD5Header))
 	req.Header.Add(AuthorizationHeader, newReq.Header.Get(AuthorizationHeader))
 			
-	auth, err := authentic(*req, key)
+	auth, err := IsAuthentic(*req, key)
 	
 	if err != nil {
 		t.Error(err)

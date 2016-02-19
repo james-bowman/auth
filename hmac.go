@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"io/ioutil"
+	"time"
 )
 
 const (
@@ -55,9 +56,14 @@ func generateHMAC(message string, key []byte) (string) {
 	return msg
 }
 
-func sign(request http.Request, id string, key []byte) (http.Request, error) {
+func Sign(request http.Request, id string, key []byte) (http.Request, error) {
 	uri := request.URL.Path
 	contentType, date := request.Header.Get(ContentTypeHeader), request.Header.Get(DateHeader)
+
+	if date == "" {
+		date = time.Now().Format(http.TimeFormat)
+		request.Header.Add(DateHeader, date)
+	}
 
 	contentMD5 := request.Header.Get(ContentMD5Header)
 	if contentMD5 == "" {
@@ -78,12 +84,26 @@ func sign(request http.Request, id string, key []byte) (http.Request, error) {
 	return request, nil
 }
 
-func authentic(request http.Request, key []byte) (bool, error) {
+func IsAuthentic(request http.Request, key []byte) (bool, error) {
+	// if message is too old then fail
+	requestDate := request.Header.Get(DateHeader)
+	t, err := time.Parse(requestDate, http.TimeFormat)
+	if err != nil {
+		return false, err
+	}
+	
+	// TODO: What if no date is included in the request?	
+	age := time.Since(t)
+	if age.Minutes() > 15 {
+		return false, nil
+	}
+
 	// if message digest doesn't match then message is not authentic/tampered with
 	contentMD5 := request.Header.Get(ContentMD5Header)
 	if contentMD5 == "" {
 		return false, nil
 	}
+	
 	digest, err := generateDigestForBody(request.Body)
 	if err != nil {
 		return false, err
@@ -94,7 +114,6 @@ func authentic(request http.Request, key []byte) (bool, error) {
 	
 	// if signature doesn't match then message is not authentic
 	
-	// if message is too old then fail
-	
+
 	return true, nil
 }
