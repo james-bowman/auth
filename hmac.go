@@ -2,21 +2,21 @@ package auth
 
 import (
 	"crypto/hmac"
-	"crypto/sha1"
 	"crypto/md5"
+	"crypto/sha1"
 	"encoding/base64"
-	"io"
-	"hash"
 	"fmt"
-	"net/http"
+	"hash"
+	"io"
 	"io/ioutil"
+	"net/http"
 	"time"
 )
 
 const (
-	ContentTypeHeader = "Content-Type"
-	DateHeader = "Date"
-	ContentMD5Header = "Content-MD5"
+	ContentTypeHeader   = "Content-Type"
+	DateHeader          = "Date"
+	ContentMD5Header    = "Content-MD5"
 	AuthorizationHeader = "Authorization"
 )
 
@@ -24,11 +24,11 @@ func applyHash(h hash.Hash, message string) string {
 	io.WriteString(h, message)
 	data := h.Sum(nil)
 	str := base64.StdEncoding.EncodeToString(data)
-	
+
 	return str
 }
 
-func generateDigest(message string) (string) {
+func generateDigest(message string) string {
 	msg := applyHash(md5.New(), message)
 	return msg
 }
@@ -46,11 +46,11 @@ func generateDigestForBody(body io.ReadCloser) (string, error) {
 		}
 	}
 	contentMD5 := generateDigest(string(data))
-	
+
 	return contentMD5, nil
 }
 
-func generateHMAC(message string, key []byte) (string) {
+func generateHMAC(message string, key []byte) string {
 	h := hmac.New(sha1.New, key)
 	msg := applyHash(h, message)
 	return msg
@@ -71,28 +71,29 @@ func Sign(request http.Request, id string, key []byte) (http.Request, error) {
 		if err != nil {
 			return request, err
 		}
-		
+
 		request.Header.Add(ContentMD5Header, contentMD5)
 	}
-	
+
 	// 'content-type,content-MD5,request URI,timestamp'
 	mac := contentType + "," + contentMD5 + "," + uri + "," + date
-	
+
 	hmac := generateHMAC(mac, key)
-	request.Header.Add(AuthorizationHeader, "APIAuth " + id + ":" + hmac)
-	
+	request.Header.Add(AuthorizationHeader, "APIAuth "+id+":"+hmac)
+
 	return request, nil
 }
 
 func IsAuthentic(request http.Request, key []byte) (bool, error) {
 	// if message is too old then fail
 	requestDate := request.Header.Get(DateHeader)
-	t, err := time.Parse(requestDate, http.TimeFormat)
+
+	t, err := time.Parse(http.TimeFormat, requestDate)
 	if err != nil {
 		return false, err
 	}
-	
-	// TODO: What if no date is included in the request?	
+
+	// TODO: What if no date is included in the request?
 	age := time.Since(t)
 	if age.Minutes() > 15 {
 		return false, nil
@@ -103,7 +104,7 @@ func IsAuthentic(request http.Request, key []byte) (bool, error) {
 	if contentMD5 == "" {
 		return false, nil
 	}
-	
+
 	digest, err := generateDigestForBody(request.Body)
 	if err != nil {
 		return false, err
@@ -111,9 +112,8 @@ func IsAuthentic(request http.Request, key []byte) (bool, error) {
 	if digest != contentMD5 {
 		return false, nil
 	}
-	
+
 	// if signature doesn't match then message is not authentic
-	
 
 	return true, nil
 }
