@@ -10,6 +10,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"regexp"
 	"time"
 )
 
@@ -50,7 +51,10 @@ func generateDigestForBody(body io.ReadCloser) (string, error) {
 	return contentMD5, nil
 }
 
-func generateHMAC(message string, key []byte) string {
+func generateHMAC(contentType string, contentMD5 string, uri string, date string, key []byte) string {
+	// 'content-type,content-MD5,request URI,timestamp'
+	message := contentType + "," + contentMD5 + "," + uri + "," + date
+
 	h := hmac.New(sha1.New, key)
 	msg := applyHash(h, message)
 	return msg
@@ -67,18 +71,15 @@ func Sign(request http.Request, id string, key []byte) (http.Request, error) {
 
 	contentMD5 := request.Header.Get(ContentMD5Header)
 	if contentMD5 == "" {
-		contentMD5, err := generateDigestForBody(request.Body)
+		var err error
+		contentMD5, err = generateDigestForBody(request.Body)
 		if err != nil {
 			return request, err
 		}
-
 		request.Header.Add(ContentMD5Header, contentMD5)
 	}
 
-	// 'content-type,content-MD5,request URI,timestamp'
-	mac := contentType + "," + contentMD5 + "," + uri + "," + date
-
-	hmac := generateHMAC(mac, key)
+	hmac := generateHMAC(contentType, contentMD5, uri, date, key)
 	request.Header.Add(AuthorizationHeader, "APIAuth "+id+":"+hmac)
 
 	return request, nil
@@ -88,12 +89,15 @@ func IsAuthentic(request http.Request, key []byte) (bool, error) {
 	// if message is too old then fail
 	requestDate := request.Header.Get(DateHeader)
 
+	if requestDate == "" {
+		return false, nil
+	}
+
 	t, err := time.Parse(http.TimeFormat, requestDate)
 	if err != nil {
 		return false, err
 	}
 
-	// TODO: What if no date is included in the request?
 	age := time.Since(t)
 	if age.Minutes() > 15 {
 		return false, nil
@@ -113,7 +117,19 @@ func IsAuthentic(request http.Request, key []byte) (bool, error) {
 		return false, nil
 	}
 
+	authRE := regexp.MustCompile("APIAuth ([^:]+):(.+)$")
+	authString := request.Header.Get(AuthorizationHeader)
+
+	if authString == "" || !authRE.MatchString(authString) {
+		return false, err
+	}
+
 	// if signature doesn't match then message is not authentic
+	requestHMAC := authRE.FindStringSubmatch(authString)[2]
+	hmac := generateHMAC(request.Header.Get(ContentTypeHeader), contentMD5, request.URL.Path, requestDate, key)
+	if hmac != requestHMAC {
+		return false, nil
+	}
 
 	return true, nil
 }

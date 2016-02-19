@@ -22,7 +22,7 @@ func TestGenerateDigest(t *testing.T) {
 func TestSignAuthentic(t *testing.T) {
 	key := []byte("hsdofhw")
 
-	req, err := http.NewRequest("GET", "http://example.com", nil)
+	req, err := http.NewRequest("GET", "http://example.com:80/path/to/resource.xml", nil)
 	// /api/v2/projects/[YOUR_PROJECT]/cards/[CARD_NUMBER].xml
 
 	if err != nil {
